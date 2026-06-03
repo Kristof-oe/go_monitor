@@ -48,5 +48,6 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 		fmt.Fprintf(os.Stderr, "server error: %v\n", serverErr)
 		return 1
 	}
+	fmt.Println("Linko is shutting down")
 	return 0
 }

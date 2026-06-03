@@ -21,6 +21,7 @@ func newServer(store store.Store, port int, cancel context.CancelFunc) *server {
 	mux := http.NewServeMux()
 
 	srv := &http.Server{
+
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: mux,
 	}
@@ -47,9 +48,15 @@ func (s *server) start() error {
 	if err != nil {
 		return err
 	}
+	tcpAddr := ln.Addr().(*net.TCPAddr)
+	port := tcpAddr.Port
+
+	seg := fmt.Sprintf("Linko is running on http://localhost:%d", port)
+	fmt.Println(seg)
 	if err := s.httpServer.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+
 	return nil
 }
 
