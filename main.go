@@ -69,21 +69,33 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 	return nil
 }
 
-func initializeLogger(logFile string) (*log.Logger, error) {
+func initializeLogger(logFile string) (*log.Logger, CloseFunc, error) {
 
 	if logFile != "" {
 
 		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 
 		}
-		multiWriter := io.MultiWriter(os.Stderr, f)
-		bufferedFile := bufio.NewWriterSize(multiWriter, 8192)
-		logger := log.New(bufferedFile, "", log.LstdFlags)
-		return logger, nil
+		bufferedFile := bufio.NewWriterSize(f, 8192)
+		multiWriter := io.MultiWriter(os.Stderr, bufferedFile)
+
+		logger := log.New(multiWriter, "", log.LstdFlags)
+		return logger, func() error {
+			seg := bufferedFile.Flush()
+			if seg != nil {
+				return seg
+			}
+			return f.Close()
+
+		}, nil
 	}
 	var standardLogger = log.New(os.Stderr, "", log.LstdFlags)
-	return standardLogger, nil
+	return standardLogger, func() error {
+		return nil
+	}, nil
 
 }
+
+type CloseFunc func() error
