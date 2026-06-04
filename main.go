@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -69,6 +70,7 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 }
 
 func initializeLogger(logFile string) (*log.Logger, error) {
+
 	if logFile != "" {
 
 		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
@@ -77,7 +79,8 @@ func initializeLogger(logFile string) (*log.Logger, error) {
 
 		}
 		multiWriter := io.MultiWriter(os.Stderr, f)
-		logger := log.New(multiWriter, "", log.LstdFlags)
+		bufferedFile := bufio.NewWriterSize(multiWriter, 8192)
+		logger := log.New(bufferedFile, "", log.LstdFlags)
 		return logger, nil
 	}
 	var standardLogger = log.New(os.Stderr, "", log.LstdFlags)
