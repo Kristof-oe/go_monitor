@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -18,6 +19,7 @@ var logger = log.New(os.Stderr, "DEBUG: ", log.LstdFlags)
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
+	seg := os.Getenv("LINKO_LOG_FILE")
 	httpPort := flag.Int("port", 8899, "port to listen on")
 	dataDir := flag.String("data", "./data", "directory to store data")
 	flag.Parse()
@@ -28,6 +30,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", status)
 		os.Exit(1)
 	}
+	initializeLogger(seg)
 
 }
 
@@ -63,4 +66,21 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 	}
 	standardLogger.Println("Linko is shutting down")
 	return nil
+}
+
+func initializeLogger(logFile string) (*log.Logger, error) {
+	if logFile != "" {
+
+		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			return nil, err
+
+		}
+		multiWriter := io.MultiWriter(os.Stderr, f)
+		logger := log.New(multiWriter, "", log.LstdFlags)
+		return logger, nil
+	}
+	var standardLogger = log.New(os.Stderr, "", log.LstdFlags)
+	return standardLogger, nil
+
 }
