@@ -37,7 +37,7 @@ func main() {
 
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) error {
 
-	debugHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+	debugHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})
 
@@ -48,7 +48,7 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 
 	defer logFile.Close()
 
-	infoHandler := slog.NewTextHandler(logFile, &slog.HandlerOptions{
+	infoHandler := slog.NewJSONHandler(logFile, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})
 
