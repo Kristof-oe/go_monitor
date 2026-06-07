@@ -108,8 +108,8 @@ func (s *server) handlerRedirect(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerListURLs(w http.ResponseWriter, r *http.Request) {
 	codes, err := s.store.List(r.Context())
 	if err != nil {
-		s.logger.Error("failed to list URLs:",
-			"err", err,
+		s.logger.Error("failed to list URLs",
+			"error", err,
 		)
 		http.Error(w, "failed to list URLs", http.StatusInternalServerError)
 		return
