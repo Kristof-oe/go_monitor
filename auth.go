@@ -66,3 +66,8 @@ func (s *server) validatePassword(password, stored string) (bool, error) {
 	}
 	return true, nil
 }
+
+type stackTracer interface {
+	error
+	StackTrace() pkgerr.StackTrace
+}
