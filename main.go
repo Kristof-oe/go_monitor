@@ -3,9 +3,9 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -37,9 +37,12 @@ func main() {
 
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) error {
 
-	debugHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})
+	logger, closeLogger, err := initializeLogger(os.Getenv("LINKO_LOG_FILE"))
+	defer closeLogger()
+
+	// debugHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+	// 	Level: slog.LevelDebug,
+	// })
 
 	logFile, err := os.OpenFile("linko.access.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 	if err != nil {
@@ -48,14 +51,14 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 
 	defer logFile.Close()
 
-	infoHandler := slog.NewJSONHandler(logFile, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})
+	// infoHandler := slog.NewJSONHandler(logFile, &slog.HandlerOptions{
+	// 	Level: slog.LevelInfo,
+	// })
 
-	logger := slog.New(slog.NewMultiHandler(
-		debugHandler,
-		infoHandler,
-	))
+	// logger := slog.New(slog.NewMultiHandler(
+	// 	debugHandler,
+	// 	infoHandler,
+	// ))
 	st, err := store.New(dataDir, logger)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create store: %v", err))
@@ -83,33 +86,57 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 	return nil
 }
 
-func initializeLogger(logFile string) (*slog.Logger, CloseFunc, error) {
+func initializeLogger(logFile string) (*slog.Logger, closeFunc, error) {
+	handlers := []slog.Handler{
+		slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			Level:       slog.LevelDebug,
+			ReplaceAttr: replaceAttr,
+		}),
+	}
+	closers := []closeFunc{}
 
 	if logFile != "" {
-
-		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		file, err := os.OpenFile(logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 		if err != nil {
-			return nil, nil, err
-
+			return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 		}
-		bufferedFile := bufio.NewWriterSize(f, 8192)
-		multiWriter := io.MultiWriter(os.Stderr, bufferedFile)
-
-		logger := slog.New(slog.NewTextHandler(multiWriter, nil))
-		return logger, func() error {
-			seg := bufferedFile.Flush()
-			if seg != nil {
-				return seg
+		bufferedFile := bufio.NewWriterSize(file, 8192)
+		close := func() error {
+			if err := bufferedFile.Flush(); err != nil {
+				return fmt.Errorf("failed to flush log file: %w", err)
 			}
-			return f.Close()
-
-		}, nil
+			if err := file.Close(); err != nil {
+				return fmt.Errorf("failed to close log file: %w", err)
+			}
+			return nil
+		}
+		handlers = append(handlers, slog.NewJSONHandler(bufferedFile, &slog.HandlerOptions{
+			Level:       slog.LevelInfo,
+			ReplaceAttr: replaceAttr,
+		}))
+		closers = append(closers, close)
 	}
-	var standardLogger = slog.New(slog.NewTextHandler(os.Stderr, nil))
-	return standardLogger, func() error {
-		return nil
-	}, nil
-
+	closer := func() error {
+		var errs []error
+		for _, close := range closers {
+			if err := close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
+	}
+	return slog.New(slog.NewMultiHandler(handlers...)), closer, nil
 }
 
-type CloseFunc func() error
+type closeFunc func() error
+
+func replaceAttr(groups []string, a slog.Attr) slog.Attr {
+	if a.Key == "error" {
+		err, ok := a.Value.Any().(error)
+		if !ok {
+			return a
+		}
+		return slog.String("error", fmt.Sprintf("%+v", err))
+	}
+	return a
+}
